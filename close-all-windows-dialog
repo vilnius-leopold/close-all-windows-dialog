@@ -1,0 +1,50 @@
+#!/usr/bin/ruby
+
+def get_open_windows
+	windows = []
+
+	`wmctrl -lp`.split("\n").each do |line|
+		line_array = line.split(/\s+/)
+
+		pid = line_array[2].to_i
+		puts "LINE: #{line}"
+
+		windows << {
+			:win_id   => line_array[0],
+			:p_name   => `ps -A | grep #{pid} | rev | cut -d\\  -f 1 | rev`.strip,
+			:app_name => `cat /usr/share/applications/$(ps -p #{pid} -o comm=).desktop | grep Name= | head -n 1 | cut -d= -f 2`.strip,
+			:pid      => pid,
+			:title    => line_array[4]
+		}
+	end
+
+	return windows
+end
+
+windows = get_open_windows()
+
+# don't show dialog
+# if no windows open
+exit(0) if windows.length == 0
+
+TITLE   = 'Close applications'
+TEXT    = 'Do you want to close these application windows?'
+COLUMNS = ['', 'PID', 'Application', 'Title']
+WIDTH   = 550
+HEIGHT  = 400
+
+table_head = COLUMNS.map{|c| "--column \"#{c}\""}.join(' ')
+table_body = windows.map do |win|
+	app_name = win[:app_name]
+	app_name = win[:p_name] if app_name.empty?
+
+	"TRUE #{win[:pid]} \"#{app_name}\" \"#{win[:title]}\""
+end.join(' ')
+
+command = "zenity --width #{WIDTH} --height #{HEIGHT} --list --title \"#{TITLE}\" --text \"#{TEXT}\" --checklist #{table_head} #{table_body}"
+
+output = `#{command}`
+
+puts "OUTPUT: #{output}"
+
+`close-all-windows --only #{output.gsub('|', ',')}` unless output == ''
