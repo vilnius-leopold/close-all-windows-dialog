@@ -6,15 +6,30 @@ def get_open_windows
 	`wmctrl -lp`.split("\n").each do |line|
 		line_array = line.split(/\s+/)
 
-		pid = line_array[2].to_i
-		puts "LINE: #{line}"
+		id    = line_array.shift      # 0
+		line_array.shift              # 1 remove unkown element
+		pid   = line_array.shift.to_i # 2
+		line_array.shift              # 3 remove unkown element
+		title = line_array.join(' ')  # 4 join the rest
+
+		next if pid == 0
+
+		process_name = ''
+		app_name     = ''
+
+		process_name = `ps -fwwp #{pid} | tail -n 1`.split(" ")[7] unless pid == 0
+
+		if process_name != ''
+			desktop_file = "/usr/share/applications/#{process_name}.desktop"
+			app_name     = `cat #{desktop_file} | grep Name= | head -n 1 | cut -d= -f 2`.strip if File.exists?(desktop_file)
+		end
 
 		windows << {
-			:win_id   => line_array[0],
-			:p_name   => `ps -A | grep #{pid} | rev | cut -d\\  -f 1 | rev`.strip,
-			:app_name => `cat /usr/share/applications/$(ps -p #{pid} -o comm=).desktop | grep Name= | head -n 1 | cut -d= -f 2`.strip,
-			:pid      => pid,
-			:title    => line_array[4]
+			:id            => id,
+			:process_name  => process_name,
+			:app_name      => app_name,
+			:pid           => pid,
+			:title         => title
 		}
 	end
 
@@ -36,7 +51,7 @@ HEIGHT  = 400
 table_head = COLUMNS.map{|c| "--column \"#{c}\""}.join(' ')
 table_body = windows.map do |win|
 	app_name = win[:app_name]
-	app_name = win[:p_name] if app_name.empty?
+	app_name = win[:process_name] if app_name.empty?
 
 	"TRUE #{win[:pid]} \"#{app_name}\" \"#{win[:title]}\""
 end.join(' ')
@@ -48,3 +63,4 @@ output = `#{command}`
 puts "OUTPUT: #{output}"
 
 `close-all-windows --only #{output.gsub('|', ',')}` unless output == ''
+exit($?.exit_status)
