@@ -1,5 +1,7 @@
 #!/usr/bin/ruby
 
+# implementation taken from
+# close-all-windows script
 def get_open_windows
 	windows = []
 
@@ -14,10 +16,18 @@ def get_open_windows
 
 		next if pid == 0
 
-		process_name = ''
-		app_name     = ''
+		process_name    = ''
+		process_command = ''
+		app_name        = ''
 
-		process_name = `ps -fwwp #{pid} | tail -n 1`.split(" ")[7] unless pid == 0
+		process_command = `ps --no-headers -p #{pid} -o cmd`.strip
+		process_name    = `ps --no-headers -p #{pid} -o comm`.strip
+
+		if process_name != '' && process_command != ''
+			pattern = "^.*(#{process_name}[a-z0-9\\-]*)(\\s+|$)"
+			process_name_regex = Regexp.new(pattern)
+			process_name       = process_name_regex.match(process_command)[1]
+		end
 
 		if process_name != ''
 			desktop_file = "/usr/share/applications/#{process_name}.desktop"
@@ -25,7 +35,6 @@ def get_open_windows
 		end
 
 		windows << {
-			:id            => id,
 			:process_name  => process_name,
 			:app_name      => app_name,
 			:pid           => pid,
@@ -60,7 +69,5 @@ command = "zenity --width #{WIDTH} --height #{HEIGHT} --list --title \"#{TITLE}\
 
 output = `#{command}`
 
-puts "OUTPUT: #{output}"
-
 `close-all-windows --only #{output.gsub('|', ',')}` unless output == ''
-exit($?.exit_status)
+exit($?.exitstatus)
